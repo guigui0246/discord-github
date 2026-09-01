@@ -2,11 +2,9 @@
 GitHub App authentication and client management
 """
 import jwt
-import time
 import requests
-from datetime import datetime, timedelta
-from typing import Optional, Dict, List
-from ..config import Config
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional, Dict, List
 
 
 class GitHubAppAuth:
@@ -15,14 +13,14 @@ class GitHubAppAuth:
     def __init__(self, app_id: str, private_key: str):
         self.app_id = app_id
         self.private_key = private_key
-        self._token_cache: Dict[str, Dict] = {}
+        self._token_cache: Dict[str, Dict[Any, Any]] = {}
 
     def get_jwt(self) -> str:
         """Generate JWT for GitHub App"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         exp = now + timedelta(minutes=10)
 
-        payload = {
+        payload: Dict[str, Any] = {
             "iat": int(now.timestamp()),
             "exp": int(exp.timestamp()),
             "iss": self.app_id
@@ -41,7 +39,7 @@ class GitHubAppAuth:
         # Check cache
         if cache_key in self._token_cache:
             cached = self._token_cache[cache_key]
-            if datetime.utcnow() < cached["expires_at"]:
+            if datetime.now(timezone.utc) < cached["expires_at"]:
                 return cached["token"]
 
         # Get new token
@@ -86,7 +84,7 @@ class GitHubClient:
             "X-GitHub-Api-Version": "2022-11-28"
         }
 
-    def get_user(self) -> Dict:
+    def get_user(self) -> Dict[str, Any]:
         """Get authenticated user/app info"""
         response = requests.get(
             f"{self.base_url}/app",
@@ -95,9 +93,9 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def get_installation_repositories(self) -> List[Dict]:
+    def get_installation_repositories(self) -> List[Dict[str, Any]]:
         """Get all repositories available to this installation"""
-        repos = []
+        repos: List[Dict[str, Any]] = []
         page = 1
         per_page = 100
 
@@ -118,7 +116,7 @@ class GitHubClient:
 
         return repos
 
-    def get_pull_request(self, owner: str, repo: str, pr_number: int) -> Dict:
+    def get_pull_request(self, owner: str, repo: str, pr_number: int) -> Dict[str, Any]:
         """Get pull request details"""
         response = requests.get(
             f"{self.base_url}/repos/{owner}/{repo}/pulls/{pr_number}",
@@ -127,7 +125,7 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def get_pull_request_comments(self, owner: str, repo: str, pr_number: int) -> List[Dict]:
+    def get_pull_request_comments(self, owner: str, repo: str, pr_number: int) -> List[Dict[str, Any]]:
         """Get all comments on a pull request"""
         response = requests.get(
             f"{self.base_url}/repos/{owner}/{repo}/issues/{pr_number}/comments",
@@ -137,7 +135,7 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def create_pull_request_comment(self, owner: str, repo: str, pr_number: int, body: str) -> Dict:
+    def create_pull_request_comment(self, owner: str, repo: str, pr_number: int, body: str) -> Dict[str, Any]:
         """Create a comment on a pull request"""
         response = requests.post(
             f"{self.base_url}/repos/{owner}/{repo}/issues/{pr_number}/comments",
@@ -147,7 +145,7 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def update_pull_request_comment(self, owner: str, repo: str, comment_id: str, body: str) -> Dict:
+    def update_pull_request_comment(self, owner: str, repo: str, comment_id: str, body: str) -> Dict[str, Any]:
         """Update a pull request comment"""
         response = requests.patch(
             f"{self.base_url}/repos/{owner}/{repo}/issues/comments/{comment_id}",
@@ -157,9 +155,9 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
-    def get_workflow_runs(self, owner: str, repo: str, branch: Optional[str] = None) -> List[Dict]:
+    def get_workflow_runs(self, owner: str, repo: str, branch: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get workflow runs for a repository"""
-        params = {"per_page": 30}
+        params: Dict[str, Any] = {"per_page": 30}
         if branch:
             params["branch"] = branch
 

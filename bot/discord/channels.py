@@ -7,7 +7,7 @@ from typing import Optional
 
 class ChannelManager:
     """Manage Discord channels for PRs and categories"""
-    
+
     @staticmethod
     async def get_or_create_category(
         guild: discord.Guild,
@@ -18,10 +18,10 @@ class ChannelManager:
         for category in guild.categories:
             if category.name.lower() == category_name.lower():
                 return category
-        
+
         # Create new category
         return await guild.create_category(category_name)
-    
+
     @staticmethod
     async def get_or_create_pr_channel(
         guild: discord.Guild,
@@ -32,19 +32,19 @@ class ChannelManager:
         """Get existing PR channel or create new one"""
         channel_name = f"pr-{pr_number}-{pr_title[:30].lower().replace(' ', '-').replace('/', '-')}"
         channel_name = channel_name[:100]  # Discord channel name limit
-        
+
         # Look for existing channel
         for channel in category.channels:
             if isinstance(channel, discord.TextChannel) and channel.name == channel_name:
                 return channel
-        
+
         # Create new channel
         return await guild.create_text_channel(
             channel_name,
             category=category,
             topic=f"Pull Request #{pr_number}"
         )
-    
+
     @staticmethod
     async def delete_channel(channel: discord.TextChannel) -> bool:
         """Delete a Discord channel"""
@@ -55,7 +55,7 @@ class ChannelManager:
             return False
         except discord.NotFound:
             return True  # Already deleted
-    
+
     @staticmethod
     async def send_pr_message(
         channel: discord.TextChannel,
@@ -75,9 +75,9 @@ class ChannelManager:
         embed.add_field(name="Title", value=pr_title, inline=False)
         embed.add_field(name="Author", value=pr_author, inline=True)
         embed.set_footer(text="GitHub PR Discussion Thread")
-        
+
         return await channel.send(embed=embed)
-    
+
     @staticmethod
     async def send_workflow_notification(
         channel: discord.TextChannel,
@@ -95,9 +95,9 @@ class ChannelManager:
             "cancelled": discord.Color.from_rgb(255, 165, 0),
             "in_progress": discord.Color.gold(),
         }
-        
+
         color = color_map.get(conclusion or status, discord.Color.blurple())
-        
+
         embed = discord.Embed(
             title=f"Workflow: {workflow_name}",
             description=f"Status: **{conclusion or status}**",
@@ -106,5 +106,5 @@ class ChannelManager:
         )
         embed.add_field(name="Branch", value=branch, inline=True)
         embed.add_field(name="Status", value=conclusion or status, inline=True)
-        
+
         return await channel.send(embed=embed)

@@ -2,17 +2,16 @@
 GitHub cog for pull request management
 """
 import discord
-from discord.ext import commands, tasks
+from discord.ext import commands
 from discord import app_commands
-from typing import Optional
 
 
 class GitHubCog(commands.Cog):
     """GitHub-related commands and handlers"""
-    
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-    
+
     @app_commands.command(name="github", description="Show GitHub integration status")
     async def github(self, interaction: discord.Interaction):
         """Display GitHub integration information"""
@@ -31,9 +30,9 @@ class GitHubCog(commands.Cog):
             value="✅ Connected",
             inline=False
         )
-        
+
         await interaction.response.send_message(embed=embed)
-    
+
     @app_commands.command(
         name="link_repo",
         description="Link a GitHub repository to this channel"
@@ -56,15 +55,15 @@ class GitHubCog(commands.Cog):
                 ephemeral=True
             )
             return
-        
+
         await interaction.response.defer(ephemeral=True)
-        
+
         # TODO: Implement repository linking
         await interaction.followup.send(
             f"✅ Repository `{repo}` linked to category `{category}`",
             ephemeral=True
         )
-    
+
     @app_commands.command(
         name="repo_status",
         description="Check status of linked repositories"
@@ -75,14 +74,14 @@ class GitHubCog(commands.Cog):
             title="Linked Repositories",
             color=discord.Color.blurple()
         )
-        
+
         # TODO: Fetch from database
         embed.add_field(
             name="No repositories linked",
             value="Use `/link_repo` to add a repository",
             inline=False
         )
-        
+
         await interaction.response.send_message(embed=embed)
 
 

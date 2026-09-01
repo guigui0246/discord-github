@@ -1,7 +1,8 @@
 """
 Main Discord bot with webhook server
 """
-import asyncio
+from typing import Any
+
 import discord
 from discord.ext import commands
 import logging
@@ -68,7 +69,7 @@ class DiscordGitHubBot(commands.Bot):
         except Exception as e:
             logger.error(f"Failed to sync commands: {e}")
 
-    async def on_error(self, event_method, *args, **kwargs):
+    async def on_error(self, event_method: str, *args: Any, **kwargs: Any):
         """Error handler"""
         logger.error(f"Error in {event_method}", exc_info=True)
 
@@ -88,4 +89,5 @@ def create_bot():
 
 if __name__ == "__main__":
     bot = create_bot()
+    assert isinstance(Config.DISCORD_TOKEN, str) and Config.DISCORD_TOKEN, "DISCORD_TOKEN must be set in config"
     bot.run(Config.DISCORD_TOKEN)

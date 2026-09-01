@@ -3,7 +3,7 @@ Database models and initialization
 """
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
@@ -39,8 +39,8 @@ class GitHubInstallation(Base):
     installation_id = Column(String, unique=True, index=True)
     account_name = Column(String)
     account_type = Column(String)  # User or Organization
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     repositories = relationship("Repository", back_populates="installation")
@@ -58,8 +58,8 @@ class Repository(Base):
     discord_category_id = Column(String)
     webhook_id = Column(String)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     installation = relationship("GitHubInstallation", back_populates="repositories")
@@ -78,9 +78,9 @@ class PullRequest(Base):
     github_url = Column(String)
     author = Column(String)
     status = Column(String)  # open, closed, merged
-    last_sync = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_sync = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     repository = relationship("Repository", back_populates="pull_requests")
@@ -97,8 +97,8 @@ class Comment(Base):
     discord_message_id = Column(String)
     author = Column(String)
     source = Column(String)  # github or discord
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     pull_request = relationship("PullRequest", back_populates="comments")
@@ -116,8 +116,8 @@ class WorkflowRun(Base):
     status = Column(String)  # queued, in_progress, completed
     conclusion = Column(String)  # success, failure, neutral, cancelled
     discord_message_id = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 def init_db():
