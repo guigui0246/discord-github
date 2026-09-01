@@ -29,7 +29,7 @@ class DiscordGitHubBot(commands.Bot):
         intents.guild_messages = True
         intents.dm_messages = True
 
-        super().__init__(command_prefix="/", intents=intents)
+        super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
         """Called when bot is starting"""
@@ -52,7 +52,7 @@ class DiscordGitHubBot(commands.Bot):
 
             cog_name = cog_file.stem
             try:
-                await self.load_extension(f".cogs.{cog_name}")
+                await self.load_extension(f"bot.cogs.{cog_name}")
                 logger.info(f"Loaded cog: {cog_name}")
             except Exception as e:
                 logger.error(f"Failed to load cog {cog_name}: {e}")

@@ -39,13 +39,13 @@ class GitHubCog(commands.Cog):
     )
     @app_commands.describe(
         repo="Repository in owner/name format",
-        category="Discord category name for PR channels"
+        category="Discord category for PR channels"
     )
     async def link_repo(
         self,
         interaction: discord.Interaction,
         repo: str,
-        category: str
+        category: discord.CategoryChannel
     ):
         """Link a GitHub repository to Discord"""
         # Validate format
@@ -60,7 +60,7 @@ class GitHubCog(commands.Cog):
 
         # TODO: Implement repository linking
         await interaction.followup.send(
-            f"✅ Repository `{repo}` linked to category `{category}`",
+            f"✅ Repository `{repo}` linked to category `{category.name}`",
             ephemeral=True
         )
 
