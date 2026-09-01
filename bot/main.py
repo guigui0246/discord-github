@@ -52,7 +52,7 @@ class DiscordGitHubBot(commands.Bot):
 
             cog_name = cog_file.stem
             try:
-                await self.load_extension(f"cogs.{cog_name}")
+                await self.load_extension(f".cogs.{cog_name}")
                 logger.info(f"Loaded cog: {cog_name}")
             except Exception as e:
                 logger.error(f"Failed to load cog {cog_name}: {e}")
