@@ -70,6 +70,21 @@ class WebhookParser:
         }
 
     @staticmethod
+    def parse_issue_event(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract issue details from an issues event."""
+        issue = payload["issue"]
+        return {
+            "action": payload["action"],
+            "issue_number": issue["number"],
+            "issue_title": issue["title"],
+            "issue_body": issue.get("body") or "",
+            "author": issue["user"]["login"],
+            "status": issue["state"],
+            "url": issue["html_url"],
+            "repo_full_name": payload["repository"]["full_name"],
+        }
+
+    @staticmethod
     def parse_workflow_run_event(payload: Dict[str, Any]) -> Dict[str, Any]:
         """Extract workflow run details from workflow_run event"""
         run = payload["workflow_run"]

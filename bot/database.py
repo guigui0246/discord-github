@@ -84,6 +84,24 @@ class PullRequest(Base):
     comments = relationship("Comment", back_populates="pull_request")
 
 
+class Issue(Base):
+    """GitHub issue and Discord channel mapping"""
+    __tablename__ = "issues"
+
+    id = Column(Integer, primary_key=True)
+    repository_id = Column(Integer, ForeignKey("repositories.id"))
+    issue_number = Column(Integer)
+    issue_title = Column(String)
+    discord_channel_id = Column(String, unique=True, index=True)
+    github_url = Column(String)
+    author = Column(String)
+    status = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    repository = relationship("Repository")
+
+
 class Comment(Base):
     """Comment synchronization tracking"""
     __tablename__ = "comments"

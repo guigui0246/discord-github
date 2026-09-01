@@ -13,7 +13,7 @@ import uvicorn
 
 from bot.config import Config
 from bot.github.webhooks import WebhookVerifier, WebhookParser
-from bot.database import SessionLocal, GitHubInstallation, Repository, PullRequest, Comment, WorkflowRun
+from bot.database import SessionLocal, GitHubInstallation, Repository, PullRequest, Issue, Comment, WorkflowRun
 from bot.main import create_bot
 from bot.discord.channels import ChannelManager
 
@@ -109,6 +109,8 @@ async def github_webhook(request: Request):
     try:
         if event_type == "pull_request":
             await handle_pull_request(payload)
+        elif event_type == "issues":
+            await handle_issue(payload)
         elif event_type == "issue_comment":
             await handle_issue_comment(payload)
         elif event_type == "workflow_run":
@@ -230,10 +232,103 @@ async def handle_issue_comment(payload: dict[str, Any]):
             finally:
                 db.close()
         else:
-            logger.debug(f"Issue comment (not a PR): {comment_data['action']}")
+            logger.info(f"Issue {comment_data['pr_number']} comment: {comment_data['action']}")
+            db = SessionLocal()
+            try:
+                issue = cast(Any, db.query(Issue).join(Repository).filter(
+                    Repository.repo_full_name == comment_data["repo_full_name"],
+                    Issue.issue_number == comment_data["pr_number"],
+                ).first())
+                if issue is None or not issue.discord_channel_id or bot is None:
+                    return
+                channel = get_text_channel(cast(str, issue.discord_channel_id))
+                if channel is None:
+                    return
+                tracked = cast(Any, db.query(Comment).filter_by(
+                    github_comment_id=str(comment_data["comment_id"])
+                ).first())
+                content = (
+                    f"**{comment_data['author']}** (GitHub):\n"
+                    f"{comment_data['comment_body']}\n{comment_data['url']}"
+                )
+                if comment_data["action"] == "created" and tracked is None:
+                    message = await channel.send(content)
+                    db.add(Comment(
+                        pull_request_id=None,
+                        github_comment_id=str(comment_data["comment_id"]),
+                        discord_message_id=str(message.id),
+                        author=comment_data["author"], source="github",
+                    ))
+                elif tracked is not None and comment_data["action"] == "edited":
+                    message = await channel.fetch_message(int(tracked.discord_message_id))
+                    await message.edit(content=content)
+                elif tracked is not None and comment_data["action"] == "deleted":
+                    message = await channel.fetch_message(int(tracked.discord_message_id))
+                    await message.delete()
+                    db.delete(tracked)
+                db.commit()
+            finally:
+                db.close()
 
     except Exception as e:
         logger.error(f"Error handling comment event: {e}", exc_info=True)
+
+
+async def handle_issue(payload: dict[str, Any]):
+    """Create and update Discord channels for GitHub issues."""
+    issue_data = webhook_parser.parse_issue_event(payload)
+    logger.info(f"Issue #{issue_data['issue_number']}: {issue_data['action']}")
+
+    db = SessionLocal()
+    try:
+        repository = cast(Any, db.query(Repository).filter_by(
+            repo_full_name=issue_data["repo_full_name"], active=True
+        ).first())
+        if repository is None or bot is None:
+            return
+
+        issue = cast(Any, db.query(Issue).filter_by(
+            repository_id=repository.id, issue_number=issue_data["issue_number"]
+        ).first())
+        if issue is None:
+            issue = cast(Any, Issue(
+                repository_id=repository.id,
+                issue_number=issue_data["issue_number"],
+            ))
+            db.add(issue)
+        issue.issue_title = issue_data["issue_title"]
+        issue.github_url = issue_data["url"]
+        issue.author = issue_data["author"]
+        issue.status = issue_data["status"]
+
+        category = bot.get_channel(int(cast(str, repository.discord_category_id)))
+        if not isinstance(category, discord.CategoryChannel):
+            db.commit()
+            return
+
+        channel = get_text_channel(cast(str, issue.discord_channel_id)) if issue.discord_channel_id else None
+        if channel is None:
+            channel = await ChannelManager.get_or_create_pr_channel(
+                category.guild, category, issue.issue_number, issue.issue_title
+            )
+            issue.discord_channel_id = str(channel.id)
+            embed = discord.Embed(
+                title=f"Issue #{issue.issue_number}: {issue.issue_title}",
+                description=issue_data["issue_body"][:2000] or "No description provided",
+                url=issue.github_url,
+                color=discord.Color.orange(),
+            )
+            embed.add_field(name="Author", value=issue.author, inline=True)
+            await channel.send(embed=embed)
+        elif issue_data["action"] == "labeled":
+            labels = payload["issue"].get("labels", [])
+            label_names = ", ".join(label.get("name", "") for label in labels) or "none"
+            await channel.send(f"Issue #{issue.issue_number} labels: {label_names}")
+        elif issue_data["action"] in {"closed", "reopened"}:
+            await channel.send(f"Issue #{issue.issue_number} was {issue.status} on GitHub.")
+        db.commit()
+    finally:
+        db.close()
 
 
 async def handle_workflow_run(payload: dict[str, Any]):
