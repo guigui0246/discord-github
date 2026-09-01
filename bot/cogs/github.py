@@ -20,9 +20,9 @@ class GitHubCog(commands.Cog):
 
     @staticmethod
     def _github_client(installation_id: str) -> GitHubClient:
-        if not Config.GITHUB_APP_ID or not Config.GITHUB_PRIVATE_KEY:
-            raise RuntimeError("GitHub App credentials are not configured")
-        private_key = Config.GITHUB_PRIVATE_KEY.replace("\\n", "\n")
+        if not Config.GITHUB_APP_ID:
+            raise RuntimeError("GITHUB_APP_ID is not configured")
+        private_key = Config.get_github_private_key()
         auth = GitHubAppAuth(Config.GITHUB_APP_ID, private_key)
         return GitHubClient(auth, installation_id)
 
