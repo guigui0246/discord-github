@@ -4,31 +4,32 @@ FastAPI webhook server for GitHub events
 import asyncio
 import json
 import logging
+import discord
+from contextlib import asynccontextmanager
+from typing import Any, Optional, cast
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 import uvicorn
 
 from bot.config import Config
 from bot.github.webhooks import WebhookVerifier, WebhookParser
-from bot.github.client import GitHubAppAuth, GitHubClient
-from bot.database import SessionLocal, Repository, PullRequest
+from bot.database import SessionLocal, GitHubInstallation, Repository, PullRequest, Comment, WorkflowRun
 from bot.main import create_bot
+from bot.discord.channels import ChannelManager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
-app = FastAPI(title="Discord-GitHub Bot Webhook Server")
-
 # Global bot instance (will be set during startup)
 bot = None
 webhook_verifier = WebhookVerifier()
 webhook_parser = WebhookParser()
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     """Initialize bot and other resources on startup"""
     global bot
 
@@ -41,17 +42,28 @@ async def startup_event():
     bot = create_bot()
 
     # Start bot in background
-    asyncio.create_task(bot.start(Config.DISCORD_TOKEN))
+    token = Config.DISCORD_TOKEN
+    if token is None:
+        raise RuntimeError("DISCORD_TOKEN is not configured")
+    asyncio.create_task(bot.start(token))
 
     logger.info("Webhook server started")
+    try:
+        yield
+    finally:
+        if bot:
+            await bot.close()
 
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Cleanup on shutdown"""
-    global bot
-    if bot:
-        await bot.close()
+app = FastAPI(title="Discord-GitHub Bot Webhook Server", lifespan=lifespan)
+
+
+def get_text_channel(channel_id: str) -> Optional[discord.TextChannel]:
+    """Return a cached text channel, excluding categories and private channels."""
+    if bot is None:
+        return None
+    channel = bot.get_channel(int(channel_id))
+    return channel if isinstance(channel, discord.TextChannel) else None
 
 
 @app.post("/webhook")
@@ -74,7 +86,8 @@ async def github_webhook(request: Request):
     body = await request.body()
 
     # Verify signature
-    if not webhook_verifier.verify_signature(body, signature, Config.GITHUB_WEBHOOK_SECRET):
+    secret = Config.GITHUB_WEBHOOK_SECRET
+    if secret is None or not webhook_verifier.verify_signature(body, signature, secret):
         logger.warning(f"Invalid signature for delivery {delivery_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -116,30 +129,106 @@ async def github_webhook(request: Request):
     return JSONResponse({"status": "ok"})
 
 
-async def handle_pull_request(payload: dict):
+async def handle_pull_request(payload: dict[str, Any]):
     """Handle pull request events"""
     try:
         pr_data = webhook_parser.parse_pull_request_event(payload)
         logger.info(f"PR {pr_data['pr_number']}: {pr_data['action']}")
 
-        # TODO: Implement PR synchronization
-        # - Create Discord channel if PR opened
-        # - Post PR details
-        # - Post initial message
-        # - Delete channel if PR closed/merged
+        db = SessionLocal()
+        try:
+            repository = cast(Any, db.query(Repository).filter_by(
+                repo_full_name=pr_data["repo_full_name"], active=True
+            ).first())
+            if repository is None or bot is None:
+                return
+
+            record = cast(Any, db.query(PullRequest).filter_by(
+                repository_id=repository.id, pr_number=pr_data["pr_number"]
+            ).first())
+            if record is None:
+                record = cast(Any, PullRequest(repository_id=repository.id, pr_number=pr_data["pr_number"]))
+                db.add(record)
+            record.pr_title = pr_data["pr_title"]
+            record.github_url = pr_data["url"]
+            record.author = pr_data["author"]
+            record.status = (
+                "merged" if payload["pull_request"].get("merged") else pr_data["status"]
+            )
+
+            category = bot.get_channel(int(cast(str, repository.discord_category_id)))
+            if category is None or not isinstance(category, discord.CategoryChannel):
+                db.commit()
+                return
+
+            guild = category.guild
+            channel_id = record.discord_channel_id
+            channel = get_text_channel(cast(str, channel_id)) if channel_id else None
+            if channel is None:
+                channel = await ChannelManager.get_or_create_pr_channel(
+                    guild, category, cast(int, record.pr_number), cast(str, record.pr_title)
+                )
+                record.discord_channel_id = str(channel.id)
+                await ChannelManager.send_pr_message(
+                    channel, cast(int, record.pr_number), cast(str, record.pr_title), cast(str, record.author),
+                    record.github_url, pr_data["pr_body"]
+                )
+            elif pr_data["action"] in {"reopened", "synchronize"}:
+                await channel.send(f"GitHub updated PR #{record.pr_number}: **{record.pr_title}**")
+            if record.status in {"closed", "merged"}:
+                await channel.send(f"PR #{record.pr_number} was {record.status} on GitHub.")
+            db.commit()
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Error handling PR event: {e}", exc_info=True)
 
 
-async def handle_issue_comment(payload: dict):
+async def handle_issue_comment(payload: dict[str, Any]):
     """Handle issue/PR comment events"""
     try:
         comment_data = webhook_parser.parse_issue_comment_event(payload)
 
         if comment_data["is_pr"]:
             logger.info(f"PR {comment_data['pr_number']} comment: {comment_data['action']}")
-            # TODO: Implement comment synchronization
+            db = SessionLocal()
+            try:
+                pull_request = cast(Any, db.query(PullRequest).join(Repository).filter(
+                    Repository.repo_full_name == comment_data["repo_full_name"],
+                    PullRequest.pr_number == comment_data["pr_number"],
+                ).first())
+                if pull_request is None or not pull_request.discord_channel_id or bot is None:
+                    return
+                channel = get_text_channel(cast(str, pull_request.discord_channel_id))
+                if channel is None:
+                    return
+                tracked = cast(Any, db.query(Comment).filter_by(github_comment_id=str(comment_data["comment_id"])).first())
+                if comment_data["action"] == "created" and tracked is None:
+                    message = await channel.send(
+                        f"**{comment_data['author']}** (GitHub):\n{comment_data['comment_body']}\n{comment_data['url']}"
+                    )
+                    db.add(Comment(
+                        pull_request_id=pull_request.id,
+                        github_comment_id=str(comment_data["comment_id"]),
+                        discord_message_id=str(message.id),
+                        author=comment_data["author"], source="github",
+                    ))
+                elif tracked is not None and comment_data["action"] == "edited":
+                    message = await channel.fetch_message(int(tracked.discord_message_id))
+                    await message.edit(
+                        content=(
+                            f"**{comment_data['author']}** (GitHub):\n"
+                            f"{comment_data['comment_body']}\n{comment_data['url']}"
+                        )
+                    )
+                elif tracked is not None and comment_data["action"] == "deleted":
+                    message = await channel.fetch_message(int(tracked.discord_message_id))
+                    await message.delete()
+                    db.delete(tracked)
+                db.commit()
+            finally:
+                db.close()
         else:
             logger.debug(f"Issue comment (not a PR): {comment_data['action']}")
 
@@ -147,33 +236,77 @@ async def handle_issue_comment(payload: dict):
         logger.error(f"Error handling comment event: {e}", exc_info=True)
 
 
-async def handle_workflow_run(payload: dict):
+async def handle_workflow_run(payload: dict[str, Any]):
     """Handle workflow run events"""
     try:
         workflow_data = webhook_parser.parse_workflow_run_event(payload)
         logger.info(f"Workflow {workflow_data['workflow_name']}: {workflow_data['action']}")
 
-        # TODO: Implement workflow notifications
-        # - Send notification to PR channel if associated
-        # - Update workflow status
+        db = SessionLocal()
+        try:
+            repository = cast(Any, db.query(Repository).filter_by(
+                repo_full_name=workflow_data["repo_full_name"], active=True
+            ).first())
+            if repository is None or bot is None:
+                return
+            run = cast(Any, db.query(WorkflowRun).filter_by(workflow_run_id=str(workflow_data["workflow_run_id"])).first())
+            if run is None:
+                run = cast(Any, WorkflowRun(
+                    repository_id=repository.id,
+                    workflow_run_id=str(workflow_data["workflow_run_id"]),
+                ))
+                db.add(run)
+            run.repository_id = repository.id
+            run.workflow_name = workflow_data["workflow_name"]
+            run.branch = cast(str, workflow_data["branch"] or "unknown")
+            run.status = workflow_data["status"]
+            run.conclusion = workflow_data["conclusion"]
+            for pull_request in db.query(PullRequest).filter_by(repository_id=repository.id, status="open").all():
+                channel = get_text_channel(cast(str, pull_request.discord_channel_id))
+                if channel:
+                    message = await ChannelManager.send_workflow_notification(
+                        channel, run.workflow_name, run.status, run.conclusion,
+                        workflow_data["url"], run.branch
+                    )
+                    run.discord_message_id = str(message.id)
+            db.commit()
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Error handling workflow event: {e}", exc_info=True)
 
 
-async def handle_push(payload: dict):
+async def handle_push(payload: dict[str, Any]):
     """Handle push events"""
     try:
         push_data = webhook_parser.parse_push_event(payload)
         logger.info(f"Push to {push_data['repo_full_name']}: {len(push_data['commits'])} commit(s)")
 
-        # TODO: Implement push notifications
+        db = SessionLocal()
+        try:
+            repository = cast(Any, db.query(Repository).filter_by(
+                repo_full_name=push_data["repo_full_name"], active=True
+            ).first())
+            if repository is None or bot is None:
+                return
+            branch = push_data["ref"].split("/")[-1]
+            summary = (
+                f"**{push_data['pusher']}** pushed {len(push_data['commits'])} commit(s) "
+                f"to `{branch}`."
+            )
+            for pull_request in db.query(PullRequest).filter_by(repository_id=repository.id, status="open").all():
+                channel = get_text_channel(cast(str, pull_request.discord_channel_id))
+                if channel:
+                    await channel.send(summary)
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Error handling push event: {e}", exc_info=True)
 
 
-async def handle_installation(payload: dict):
+async def handle_installation(payload: dict[str, Any]):
     """Handle GitHub App installation events"""
     try:
         action = payload["action"]
@@ -181,17 +314,25 @@ async def handle_installation(payload: dict):
 
         logger.info(f"Installation {action}: {installation['account']['login']}")
 
-        # TODO: Implement installation handling
-        # - Store installation ID in database
-        # - Discover available repositories
-        # - Update installation config
+        db = SessionLocal()
+        try:
+            account = installation["account"]
+            record = cast(Any, db.query(GitHubInstallation).filter_by(installation_id=str(installation["id"])).first())
+            if record is None:
+                record = GitHubInstallation(installation_id=str(installation["id"]))
+                db.add(record)
+            record.account_name = account["login"]
+            record.account_type = account.get("type", "User")
+            db.commit()
+        finally:
+            db.close()
 
     except Exception as e:
         logger.error(f"Error handling installation event: {e}", exc_info=True)
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> dict[str, object]:
     """Health check endpoint"""
     return {
         "status": "ok",

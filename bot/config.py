@@ -21,6 +21,7 @@ class Config:
     GITHUB_APP_ID = os.getenv("GITHUB_APP_ID")
     GITHUB_PRIVATE_KEY = os.getenv("GITHUB_PRIVATE_KEY")
     GITHUB_WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET")
+    GITHUB_INSTALLATION_ID = os.getenv("GITHUB_INSTALLATION_ID")
 
     # Database
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./bot.db")
