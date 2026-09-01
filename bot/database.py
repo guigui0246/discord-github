@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-from config import Config
+from bot.config import Config
 
 # Create database engine
 engine = create_engine(Config.DATABASE_URL, echo=Config.DEBUG)
@@ -16,14 +16,14 @@ Base = declarative_base()
 class GitHubInstallation(Base):
     """GitHub App installation"""
     __tablename__ = "github_installations"
-    
+
     id = Column(Integer, primary_key=True)
     installation_id = Column(String, unique=True, index=True)
     account_name = Column(String)
     account_type = Column(String)  # User or Organization
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     repositories = relationship("Repository", back_populates="installation")
 
@@ -31,7 +31,7 @@ class GitHubInstallation(Base):
 class Repository(Base):
     """GitHub repository configuration"""
     __tablename__ = "repositories"
-    
+
     id = Column(Integer, primary_key=True)
     installation_id = Column(Integer, ForeignKey("github_installations.id"))
     repo_owner = Column(String)
@@ -42,7 +42,7 @@ class Repository(Base):
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     installation = relationship("GitHubInstallation", back_populates="repositories")
     pull_requests = relationship("PullRequest", back_populates="repository")
@@ -51,7 +51,7 @@ class Repository(Base):
 class PullRequest(Base):
     """Pull request and Discord channel mapping"""
     __tablename__ = "pull_requests"
-    
+
     id = Column(Integer, primary_key=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"))
     pr_number = Column(Integer)
@@ -63,7 +63,7 @@ class PullRequest(Base):
     last_sync = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     repository = relationship("Repository", back_populates="pull_requests")
     comments = relationship("Comment", back_populates="pull_request")
@@ -72,7 +72,7 @@ class PullRequest(Base):
 class Comment(Base):
     """Comment synchronization tracking"""
     __tablename__ = "comments"
-    
+
     id = Column(Integer, primary_key=True)
     pull_request_id = Column(Integer, ForeignKey("pull_requests.id"))
     github_comment_id = Column(String, unique=True, index=True)
@@ -81,7 +81,7 @@ class Comment(Base):
     source = Column(String)  # github or discord
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     pull_request = relationship("PullRequest", back_populates="comments")
 
@@ -89,7 +89,7 @@ class Comment(Base):
 class WorkflowRun(Base):
     """GitHub Actions workflow run tracking"""
     __tablename__ = "workflow_runs"
-    
+
     id = Column(Integer, primary_key=True)
     repository_id = Column(Integer, ForeignKey("repositories.id"))
     workflow_run_id = Column(String, unique=True, index=True)

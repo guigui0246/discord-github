@@ -15,12 +15,15 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy bot code
+# Copy all application code
 COPY bot/ ./bot/
+COPY migrations/ ./migrations/
+COPY .env.example .
+COPY run.py migrate.py ./
 
 # Create non-root user
 RUN useradd -m botuser && chown -R botuser:botuser /app
 USER botuser
 
 # Default command runs the webhook server (which also starts the Discord bot)
-CMD ["python", "-m", "bot.webhooks_server"]
+CMD ["python", "-m", "bot"]
