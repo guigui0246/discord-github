@@ -8,6 +8,12 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from bot.config import Config
 
+# Create database directory if using SQLite
+if "sqlite:///" in Config.DATABASE_URL:
+    db_path = Config.DATABASE_URL.replace("sqlite:///", "")
+    db_dir = Path(db_path).parent
+    db_dir.mkdir(parents=True, exist_ok=True)
+
 # Create database engine
 engine = create_engine(Config.DATABASE_URL, echo=Config.DEBUG)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -105,13 +111,6 @@ class WorkflowRun(Base):
 
 def init_db():
     """Initialize database with all tables"""
-    # For SQLite, create the directory if it doesn't exist
-    if "sqlite:///" in Config.DATABASE_URL:
-        # Extract the path from the URL
-        db_path = Config.DATABASE_URL.replace("sqlite:///", "")
-        db_dir = Path(db_path).parent
-        db_dir.mkdir(parents=True, exist_ok=True)
-
     Base.metadata.create_all(bind=engine)
 
 
