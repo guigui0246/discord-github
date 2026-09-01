@@ -30,6 +30,11 @@ class DiscordGitHubBot(commands.Bot):
         intents.dm_messages = True
 
         super().__init__(command_prefix="!", intents=intents)
+        logger.info(
+            "Discord intents configured: message_content=%s guild_messages=%s",
+            intents.message_content,
+            intents.guild_messages,
+        )
 
     async def setup_hook(self):
         """Called when bot is starting"""

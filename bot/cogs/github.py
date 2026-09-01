@@ -182,6 +182,12 @@ class GitHubCog(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         """Mirror human messages in PR channels back to GitHub as comments."""
+        logger.info(
+            "Discord message received: channel=%s author=%s content_length=%s",
+            message.channel.id,
+            message.author.id,
+            len(message.content),
+        )
         if message.author.bot or message.guild is None:
             return
 
