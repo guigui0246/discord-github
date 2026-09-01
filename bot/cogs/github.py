@@ -5,11 +5,15 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import asyncio
+import logging
 from typing import Any, cast
 
 from bot.config import Config
-from bot.database import SessionLocal, GitHubInstallation, Repository, PullRequest, Comment
+from bot.database import SessionLocal, GitHubInstallation, Repository, PullRequest, Issue, Comment
 from bot.github.client import GitHubAppAuth, GitHubClient
+
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubCog(commands.Cog):
@@ -184,23 +188,44 @@ class GitHubCog(commands.Cog):
         db = SessionLocal()
         try:
             pull_request = db.query(PullRequest).filter_by(discord_channel_id=str(message.channel.id)).first()
-            if pull_request is None or cast(str, pull_request.status) != "open":
+            issue = None if pull_request else db.query(Issue).filter_by(
+                discord_channel_id=str(message.channel.id)
+            ).first()
+            if pull_request is None and issue is None:
+                return
+            if pull_request is not None and cast(str, pull_request.status) != "open":
+                return
+            if issue is not None and cast(str, issue.status) != "open":
                 return
 
-            repository = db.query(Repository).filter_by(id=pull_request.repository_id, active=True).first()
+            mapping = cast(Any, pull_request or issue)
+            repository = db.query(Repository).filter_by(id=mapping.repository_id, active=True).first()
             if repository is None or repository.installation is None:
                 return
 
             client = self._github_client(repository.installation.installation_id)
-            comment = await asyncio.to_thread(
-                client.create_pull_request_comment,
-                cast(str, repository.repo_owner),
-                cast(str, repository.repo_name),
-                cast(int, pull_request.pr_number),
-                f"**{message.author.display_name}** (Discord):\n{message.content}",
-            )
+            body = f"**{message.author.display_name}** (Discord):\n{message.content}"
+            owner = cast(str, repository.repo_owner)
+            repo_name = cast(str, repository.repo_name)
+            if pull_request is not None:
+                comment = await asyncio.to_thread(
+                    client.create_pull_request_comment,
+                    owner,
+                    repo_name,
+                    cast(int, pull_request.pr_number),
+                    body,
+                )
+            else:
+                issue_record = cast(Any, issue)
+                comment = await asyncio.to_thread(
+                    client.create_issue_comment,
+                    owner,
+                    repo_name,
+                    cast(int, issue_record.issue_number),
+                    body,
+                )
             db.add(Comment(
-                pull_request_id=pull_request.id,
+                pull_request_id=pull_request.id if pull_request else None,
                 github_comment_id=str(comment["id"]),
                 discord_message_id=str(message.id),
                 author=message.author.display_name,
@@ -208,6 +233,7 @@ class GitHubCog(commands.Cog):
             ))
             db.commit()
         except Exception:
+            logger.exception("Failed to synchronize Discord message %s to GitHub", message.id)
             db.rollback()
         finally:
             db.close()

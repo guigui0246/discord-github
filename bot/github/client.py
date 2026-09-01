@@ -145,6 +145,16 @@ class GitHubClient:
         response.raise_for_status()
         return response.json()
 
+    def create_issue_comment(self, owner: str, repo: str, issue_number: int, body: str) -> Dict[str, Any]:
+        """Create a comment on a GitHub issue."""
+        response = requests.post(
+            f"{self.base_url}/repos/{owner}/{repo}/issues/{issue_number}/comments",
+            headers=self._get_headers(),
+            json={"body": body}
+        )
+        response.raise_for_status()
+        return response.json()
+
     def update_pull_request_comment(self, owner: str, repo: str, comment_id: str, body: str) -> Dict[str, Any]:
         """Update a pull request comment"""
         response = requests.patch(
