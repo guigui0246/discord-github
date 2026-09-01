@@ -2,6 +2,7 @@
 Database models and initialization
 """
 from datetime import datetime
+from pathlib import Path
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -104,6 +105,13 @@ class WorkflowRun(Base):
 
 def init_db():
     """Initialize database with all tables"""
+    # For SQLite, create the directory if it doesn't exist
+    if "sqlite:///" in Config.DATABASE_URL:
+        # Extract the path from the URL
+        db_path = Config.DATABASE_URL.replace("sqlite:///", "")
+        db_dir = Path(db_path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+
     Base.metadata.create_all(bind=engine)
 
 

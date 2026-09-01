@@ -21,6 +21,9 @@ COPY migrations/ ./migrations/
 COPY .env.example .
 COPY run.py migrate.py ./
 
+# Create directories
+RUN mkdir -p /app/data
+
 # Create non-root user
 RUN useradd -m botuser && chown -R botuser:botuser /app
 USER botuser

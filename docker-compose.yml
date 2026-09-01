@@ -8,7 +8,7 @@ services:
       - GITHUB_APP_ID=${GITHUB_APP_ID}
       - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
       - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
-      - DATABASE_URL=sqlite:///./data/bot.db
+      - DATABASE_URL=sqlite:////app/data/bot.db
       - WEBHOOK_PORT=8000
       - WEBHOOK_URL=${WEBHOOK_URL}
       - DEBUG=${DEBUG:-False}
