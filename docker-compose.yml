@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - GITHUB_APP_ID=${GITHUB_APP_ID}
+      - GITHUB_PRIVATE_KEY=${GITHUB_PRIVATE_KEY}
+      - GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}
+      - DATABASE_URL=sqlite:///./data/bot.db
+      - WEBHOOK_PORT=8000
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - DEBUG=${DEBUG:-False}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./.env:/.env
+    restart: unless-stopped
+    networks:
+      - discord-github
+
+networks:
+  discord-github:
+    driver: bridge

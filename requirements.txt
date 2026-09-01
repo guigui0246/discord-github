@@ -1,0 +1,9 @@
+discord.py==2.3.2
+python-dotenv==1.0.0
+PyGithub==1.59.1
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.4.2
+cryptography==41.0.7
+aiohttp==3.9.1
+sqlalchemy==2.0.23
