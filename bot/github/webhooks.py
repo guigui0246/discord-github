@@ -59,6 +59,7 @@ class WebhookParser:
         return {
             "action": payload["action"],  # created, edited, deleted
             "pr_number": issue["number"] if "pull_request" in issue else None,
+            "issue_number": issue["number"],
             "comment_id": comment["id"],
             "comment_body": comment["body"],
             "author": comment["user"]["login"],

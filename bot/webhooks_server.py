@@ -232,12 +232,12 @@ async def handle_issue_comment(payload: dict[str, Any]):
             finally:
                 db.close()
         else:
-            logger.info(f"Issue {comment_data['pr_number']} comment: {comment_data['action']}")
+            logger.info(f"Issue {comment_data['issue_number']} comment: {comment_data['action']}")
             db = SessionLocal()
             try:
                 issue = cast(Any, db.query(Issue).join(Repository).filter(
                     Repository.repo_full_name == comment_data["repo_full_name"],
-                    Issue.issue_number == comment_data["pr_number"],
+                    Issue.issue_number == comment_data["issue_number"],
                 ).first())
                 if issue is None or not issue.discord_channel_id or bot is None:
                     return
