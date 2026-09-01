@@ -2,7 +2,6 @@
 Database models and initialization
 """
 import os
-import re
 from datetime import datetime, timezone
 from pathlib import Path
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, Boolean, ForeignKey
@@ -13,13 +12,11 @@ from bot.config import Config
 # Create database directory if using SQLite
 if "sqlite:///" in Config.DATABASE_URL:
     try:
-        # Extract path from sqlite:/// or sqlite://// URLs
-        match = re.search(r'sqlite:/*(.+)', Config.DATABASE_URL)
-        if match:
-            db_path = "/" + match.group(1) if not match.group(1).startswith("/") else match.group(1)
-            db_dir = Path(db_path).parent
+        # SQLAlchemy treats sqlite:/// paths without a fourth slash as relative.
+        database_path = Config.DATABASE_URL[len("sqlite:///"):]
+        db_dir = Path(database_path).parent
+        if str(db_dir) != ".":
             db_dir.mkdir(parents=True, exist_ok=True)
-            # Ensure directory is writable
             os.chmod(db_dir, 0o777)
             print(f"✅ Database directory created: {db_dir}")
     except Exception as e:

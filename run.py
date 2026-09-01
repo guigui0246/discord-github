@@ -11,16 +11,17 @@ Usage:
 
 import sys
 import os
+from typing import Any
 from pathlib import Path
+from dotenv import load_dotenv
+
+from bot.config import Config
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Setup environment
-from dotenv import load_dotenv
 load_dotenv()
 
-from bot.config import Config
 
 def run_bot():
     """Run the bot"""
@@ -35,7 +36,7 @@ def run_bot():
         sys.exit(1)
 
     # Import and run
-    from bot.webhooks_server import app, startup_event
+    from bot.webhooks_server import app
     import uvicorn
 
     print(f"🔗 Webhook server: http://localhost:{Config.WEBHOOK_PORT}")
@@ -49,6 +50,7 @@ def run_bot():
         log_level="debug" if Config.DEBUG else "info"
     )
 
+
 def run_migrations():
     """Run database migrations"""
     from migrate import run_migrations
@@ -59,6 +61,7 @@ def run_migrations():
     else:
         print("❌ Migrations failed")
         sys.exit(1)
+
 
 def run_shell():
     """Interactive Python shell with bot context"""
@@ -80,7 +83,7 @@ Available:
 Type 'help()' for more information.
 """
 
-    local_vars = {
+    local_vars: dict[str, Any] = {
         "Config": Config,
         "db": SessionLocal(),
         "Repository": Repository,
@@ -89,6 +92,7 @@ Type 'help()' for more information.
     }
 
     code.interact(banner, local=local_vars)
+
 
 if __name__ == "__main__":
     command = sys.argv[1] if len(sys.argv) > 1 else "default"
