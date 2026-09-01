@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv
 load_dotenv()
 
-from config import Config
+from bot.config import Config
 
 def run_bot():
     """Run the bot"""
